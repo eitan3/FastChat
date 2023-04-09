@@ -15,10 +15,13 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import random
+import numpy as np
 from dataclasses import dataclass
 import pathlib
 import typing
 
+import torch
 from peft import (
     LoraConfig,
     get_peft_model,
@@ -51,6 +54,12 @@ def train():
         (ModelArguments, DataArguments, TrainingArguments, LoraArguments))
     (model_args, data_args, training_args,
      lora_args) = parser.parse_args_into_dataclasses()
+
+    # Set seed.
+    random.seed(training_args.seed)
+    np.random.seed(training_args.seed)
+    torch.manual_seed(training_args.seed)
+    torch.cuda.manual_seed(training_args.seed)
 
     model = transformers.LlamaForCausalLM.from_pretrained(
         model_args.model_name_or_path,
