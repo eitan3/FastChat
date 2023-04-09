@@ -14,6 +14,8 @@
 #    limitations under the License.
 
 import copy
+import random
+import numpy as np
 from dataclasses import dataclass, field
 import json
 import logging
@@ -295,6 +297,13 @@ def train():
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    # Set seed.
+    random.seed(training_args.seed)
+    np.random.seed(training_args.seed)
+    torch.manual_seed(training_args.seed)
+    torch.cuda.manual_seed(training_args.seed)
+
     model = transformers.LlamaForCausalLM.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
