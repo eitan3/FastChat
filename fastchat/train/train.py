@@ -49,6 +49,7 @@ class DataArguments:
     data_path: str = field(default=None,
                            metadata={"help": "Path to the training data."})
     lazy_preprocess: bool = False
+    num_extra_messages: int = 0
 
 
 @dataclass
@@ -209,13 +210,29 @@ class SupervisedDataset(Dataset):
     """Dataset for supervised fine-tuning."""
 
     def __init__(self, data_path: str,
-                 tokenizer: transformers.PreTrainedTokenizer):
+                 tokenizer: transformers.PreTrainedTokenizer,
+                 num_extra_messages: int):
         super(SupervisedDataset, self).__init__()
         logging.warning("Loading data...")
         list_data_dict = json.load(open(data_path, "r"))
+        random.shuffle(list_data_dict)
 
         logging.warning("Formatting inputs...")
         sources = [example["conversations"] for example in list_data_dict]
+
+        if num_extra_messages > 0:
+            for i in range(len(sources)):
+                conversation = sources[i]
+                messages_ids = [i]
+                nem = random.randint(0, num_extra_messages)
+                for _ in range(nem):
+                    new_msg_i = random.randrange(0, len(list_data_dict))
+                    while new_msg_i in messages_ids:
+                        new_msg_i = random.randrange(0, len(list_data_dict))
+                    messages_ids.append(new_msg_i)
+                    conversation.extend(list_data_dict[new_msg_i]["conversations"])
+                sources[i] = conversation
+
         data_dict = preprocess(sources, tokenizer)
 
         self.input_ids = data_dict["input_ids"]
@@ -232,14 +249,17 @@ class LazySupervisedDataset(Dataset):
     """Dataset for supervised fine-tuning."""
 
     def __init__(self, data_path: str,
-                 tokenizer: transformers.PreTrainedTokenizer):
+                 tokenizer: transformers.PreTrainedTokenizer,
+                 num_extra_messages: int):
         super(LazySupervisedDataset, self).__init__()
         logging.warning("Loading data...")
         list_data_dict = json.load(open(data_path, "r"))
+        random.shuffle(list_data_dict)
 
         logging.warning("Formatting inputs...Skip in lazy mode")
         self.tokenizer = tokenizer
         self.list_data_dict = list_data_dict
+        self.num_extra_messages = num_extra_messages
 
     def __len__(self):
         return len(self.list_data_dict)
@@ -248,8 +268,23 @@ class LazySupervisedDataset(Dataset):
         sources = self.list_data_dict[i]
         if isinstance(i, int):
             sources = [sources]
+
+        conversation = [e["conversations"] for e in sources]
+        for j in range(len(conversation)):
+            if isinstance(i, int):
+                messages_ids = [i]
+            else:
+                messages_ids = [i[j]]
+            nem = random.randint(0, self.num_extra_messages)
+            for _ in range(nem):
+                new_msg_i = random.randrange(0, len(self.list_data_dict))
+                while new_msg_i in messages_ids:
+                    new_msg_i = random.randrange(0, len(self.list_data_dict))
+                messages_ids.append(new_msg_i)
+                conversation[j].extend(self.list_data_dict[new_msg_i]["conversations"])
+
         data_dict = preprocess(
-            copy.deepcopy([e["conversations"] for e in sources]),
+            copy.deepcopy(conversation),
             self.tokenizer)
         if isinstance(i, int):
             data_dict = dict(input_ids=data_dict["input_ids"][0],
@@ -286,7 +321,8 @@ def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
     dataset_cls = (LazySupervisedDataset
                    if data_args.lazy_preprocess else SupervisedDataset)
     train_dataset = dataset_cls(tokenizer=tokenizer,
-                                data_path=data_args.data_path)
+                                data_path=data_args.data_path,
+                                num_extra_messages=data_args.num_extra_messages)
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset,
                 eval_dataset=None,
