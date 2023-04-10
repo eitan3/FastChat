@@ -206,7 +206,7 @@ def http_bot(state, model_selector, temperature, max_new_tokens, request: gr.Req
         skip_echo_len = len(state.messages[-2][1]) + 1
     else:
         prompt = state.get_prompt()
-        skip_echo_len = len(prompt) + 1
+        skip_echo_len = len(prompt.replace("</s>", " ")) + 1
 
     # Make requests
     pload = {
@@ -224,7 +224,7 @@ def http_bot(state, model_selector, temperature, max_new_tokens, request: gr.Req
     try:
         # Stream output
         response = requests.post(worker_addr + "/worker_generate_stream",
-            headers=headers, json=pload, stream=True, timeout=10)
+            headers=headers, json=pload, stream=True, timeout=20)
         for chunk in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
             if chunk:
                 data = json.loads(chunk.decode())
